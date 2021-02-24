@@ -57,19 +57,19 @@ gopwntomcat v0.0.1
 Usage: gopwntomcat -mode [scan|pwn] [mode specific options] (default: mode scan)
 
 Scan options:
-	-port		The port to use while scanning		(default: 8080)
-	-ssl		Whether or not to use ssl	    (default: false)
+	-port		The port to use while scanning      (default: 8080)
+	-ssl		Whether or not to use ssl           (default: false)
 	-targeturi	Where the manager app is located at	(default: /manager/html)
 	-threads	Concurrent threads while scanning	(default: 1)
 	-rhost		IP or CIDR - you can define multiple
 
 Pwn options:
-	-port		The port to use for connection		(default: 8080)
-	-ssl		Whether or not to use ssl	    	(default: false)
-	-targeturi	Where the manager app is located at	(default: /manager/html)
-	-user		Valid username for logon	    (default: tomcat)
-	-pass		Valid password for logon	    (default: tomcat)
-	-customjsp	Define custom jsp to upload	    (default: embedded cmd jsp)
+	-port		The port to use for connection      (default: 8080)
+	-ssl		Whether or not to use ssl           (default: false)
+	-targeturi	Where the manager app is located at (default: /manager/html)
+	-user		Valid username for logon            (default: tomcat)
+	-pass		Valid password for logon            (default: tomcat)
+	-customjsp	Define custom jsp to upload         (default: embedded cmd jsp)
 	-rhost		Single IP, no multiple -rhost flags allowed
 
 Examples:

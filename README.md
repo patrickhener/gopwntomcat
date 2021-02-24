@@ -112,4 +112,4 @@ After you got valid credentials you can upload a command shell using this comman
 
 Navigating your browser to the link will result in a webshell showing up:
 
-![screenshot]("screenshot.png)
+![screenshot]("/screenshot.png "Command shell in browser")

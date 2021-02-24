@@ -59,8 +59,8 @@ Usage: gopwntomcat -mode [scan|pwn] [mode specific options] (default: mode scan)
 Scan options:
 	-port		The port to use while scanning      (default: 8080)
 	-ssl		Whether or not to use ssl           (default: false)
-	-targeturi	Where the manager app is located at	(default: /manager/html)
-	-threads	Concurrent threads while scanning	(default: 1)
+	-targeturi	Where the manager app is located at (default: /manager/html)
+	-threads	Concurrent threads while scanning   (default: 1)
 	-rhost		IP or CIDR - you can define multiple
 
 Pwn options:

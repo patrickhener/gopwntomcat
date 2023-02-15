@@ -26,20 +26,20 @@ type result struct {
 	details    string
 }
 
-func worker(id int, scanJobs <-chan scanJob, result chan<- *result, proxy string) {
+func worker(id int, scanJobs <-chan scanJob, result chan<- *result, proxy string, users []string, passwords []string, defaults bool, verbose bool) {
 	for scanJob := range scanJobs {
 		ip := scanJob.ip
 		port := scanJob.port
 		ssl := scanJob.ssl
 		targeturi := scanJob.targeturi
 		go func() {
-			res := scan(ip, port, ssl, targeturi, proxy)
+			res := scan(ip, port, ssl, targeturi, proxy, users, passwords, defaults, verbose)
 			result <- res
 		}()
 	}
 }
 
-func scan(host string, port int, ssl bool, targetURI string, proxy string) *result {
+func scan(host string, port int, ssl bool, targetURI string, proxy string, users []string, passwords []string, nodefaults bool, verbose bool) *result {
 	var (
 		resp   *http.Response
 		err    error
@@ -85,28 +85,81 @@ func scan(host string, port int, ssl bool, targetURI string, proxy string) *resu
 		return res
 	}
 
-	for _, creds := range utils.DefaultBasicAuthenticationList {
-		hit, _ := base64.StdEncoding.DecodeString(creds)
-		user := strings.Split(string(hit), ":")[0]
-		pass := strings.Split(string(hit), ":")[1]
-		req.Header.Set("Authorization", fmt.Sprintf("Basic %s", creds))
-		if resp, err = client.Do(req); err != nil {
-			log.Println("Unable to send GET request")
-			continue
+	// Filling custom username and password slices with default creds if nodefaults=false (which is the default)
+	if !nodefaults {
+		if verbose {
+			log.Println("Adding default credentials to guessing queue")
 		}
-		if resp.StatusCode == http.StatusOK {
-			res.vulnerable = true
-			res.details = fmt.Sprintf("Valid credentials found @%s - %s:%s", host, user, pass)
-			return res
+		users = append(users, utils.DefaultUsers...)
+		passwords = append(passwords, utils.DefaultPasswords...)
+	}
+
+	// Guessing over the 2 slices
+	for _, u := range users {
+		for _, p := range passwords {
+			if verbose {
+				log.Printf("Trying login - %s:%s", u, p)
+			}
+			cred := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", u, p)))
+			req.Header.Set("Authorization", fmt.Sprintf("Basic %s", cred))
+			if resp, err = client.Do(req); err != nil {
+				log.Println("Unable to send GET request")
+				continue
+			}
+			if resp.StatusCode == http.StatusOK {
+				res.vulnerable = true
+				res.details = fmt.Sprintf("Valid credentials found @%s - %s:%s", host, u, p)
+				if verbose {
+					log.Printf("[+] Login with %s:%s successful", u, p)
+				}
+				return res
+			} else {
+				if verbose {
+					log.Printf("[-] Login with %s:%s not successful", u, p)
+				}
+			}
 		}
 	}
 	return res
 }
 
 // Start will start the scanning
-func Start(rhostsFlag utils.Rhosts, port, threads int, ssl bool, targeturi string, proxy string, file string) {
+func Start(rhostsFlag utils.Rhosts, port, threads int, ssl bool, targeturi string, proxy string, file string, users string, passwords string, nodefaults bool, verbose bool) {
 	var ips []string
 	var scanJobs []scanJob
+	var sUsers []string = make([]string, 0)
+	var sPasswords []string = make([]string, 0)
+
+	// Read users and passwords in
+	if users != "" {
+		f, err := os.Open(users)
+		if err != nil {
+			panic("Error opening the users file " + err.Error())
+		}
+		scanner := bufio.NewScanner(f)
+
+		for scanner.Scan() {
+			sUsers = append(sUsers, scanner.Text())
+			if verbose {
+				log.Printf("Adding user: %s to bruteforce list", scanner.Text())
+			}
+		}
+	}
+
+	if passwords != "" {
+		f, err := os.Open(passwords)
+		if err != nil {
+			panic("Error opening the passwords file " + err.Error())
+		}
+		scanner := bufio.NewScanner(f)
+
+		for scanner.Scan() {
+			sPasswords = append(sPasswords, scanner.Text())
+			if verbose {
+				log.Printf("Adding password: %s to bruteforce list", scanner.Text())
+			}
+		}
+	}
 
 	// Switch between file or rhosts
 	if file != "" {
@@ -150,7 +203,7 @@ func Start(rhostsFlag utils.Rhosts, port, threads int, ssl bool, targeturi strin
 
 	// Init workers
 	for w := 1; w <= threads; w++ {
-		go worker(w, jobChannel, resultChannel, proxy)
+		go worker(w, jobChannel, resultChannel, proxy, sUsers, sPasswords, nodefaults, verbose)
 	}
 
 	// Pipe jobs to job channel
